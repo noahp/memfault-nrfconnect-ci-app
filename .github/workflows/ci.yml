@@ -22,7 +22,7 @@ jobs:
           path: zephyr-workspace/nrfconnect-ci-app
 
       - name: 💾 Cache ~/.venv
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.venv
           key: venv-${{ runner.os }}-${{ hashFiles('zephyr-workspace/zephyr/scripts/requirements.txt') }}
@@ -57,7 +57,7 @@ jobs:
           ~/zephyr-sdk-0.16.4/setup.sh -c -t arm-zephyr-eabi
 
       - name: 💾 Cache Zephyr Workspace
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: zephyr-workspace
           key: zephyr-workspace-v1-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
@@ -78,7 +78,7 @@ jobs:
           pip3 install -r zephyr/scripts/requirements.txt
 
       - name: 💾 Cache ~/.cache/ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.cache/ccache
           key: ccache-v1-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}

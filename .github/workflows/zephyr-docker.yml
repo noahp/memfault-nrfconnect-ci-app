@@ -33,7 +33,7 @@ jobs:
           west update --narrow -o=--depth=1
 
       - name: 💾 Cache ~/.cache/ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.cache/ccache
           key: ccache-v1-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
