@@ -11,6 +11,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: 💾 Cache Zephyr Workspace
+        uses: actions/cache@v3
+        with:
+          path: zephyr-workspace
+          key: zephyr-workspace-v1-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
+          restore-keys: |
+            zephyr-workspace-v1-${{ runner.os }}-
+
       - name: 🧹 Clean Landing Site
         run: |
           rm -rf zephyr-workspace/nrfconnect-ci-app
@@ -56,14 +64,6 @@ jobs:
           tar xf zephyr-sdk-0.16.4_linux-x86_64_minimal.tar.xz -C ~/
           ~/zephyr-sdk-0.16.4/setup.sh -c -t arm-zephyr-eabi
 
-      - name: 💾 Cache Zephyr Workspace
-        uses: actions/cache@v3
-        with:
-          path: zephyr-workspace
-          key: zephyr-workspace-v1-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
-          restore-keys: |
-            zephyr-workspace-v1-${{ runner.os }}-
-
       - name: ♻️ Initialize Zephyr Workspace
         # Set up the Zephyr workspace and install the Python dependencies
         run: |
@@ -87,6 +87,87 @@ jobs:
 
       - name: 🔨 Build Project
         run: |
+          cd zephyr-workspace
+          ccache -z
+          west build \
+              --board nrf7002dk_nrf5340_cpuapp \
+              --pristine=always nrfconnect-ci-app \
+              -- \
+              -DCONFIG_MEMFAULT_NCS_PROJECT_KEY=\"1234\"
+          ccache -sv
+
+  zephyr-docker-image:
+    runs-on: ubuntu-latest
+    container:
+      # Zephyr toolchain from here:
+      # https://github.com/zephyrproject-rtos/docker-image/pkgs/container/ci
+      image: ghcr.io/zephyrproject-rtos/ci:v0.26.6
+    env:
+      # Tell cmake where to find the zephyr sdk
+      CMAKE_PREFIX_PATH: /opt/toolchains
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Clone the repo to a subdirectory, so we can initialize the Zephyr
+          # workspace in the parent directory.
+          path: zephyr-workspace/nrfconnect-ci-app
+
+      - name: ♻️ Initialize Zephyr Workspace
+        # Set up the Zephyr workspace and install the Python dependencies
+        run: |
+          cd zephyr-workspace
+          rm -rf .west
+          west init -l nrfconnect-ci-app
+          west update --narrow -o=--depth=1
+
+      - name: 💾 Cache ~/.cache/ccache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/ccache
+          key: ccache-v1-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
+          restore-keys: |
+            ccache-v1-${{ runner.os }}-
+
+      - name: 🔨 Build Project
+        run: |
+          cd zephyr-workspace
+          ccache -z
+          west build \
+              --board nrf7002dk_nrf5340_cpuapp \
+              --pristine=always nrfconnect-ci-app \
+              -- \
+              -DCONFIG_MEMFAULT_NCS_PROJECT_KEY=\"1234\"
+          ccache -sv
+
+  custom-docker-image:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/noahp/memfault-nrfconnect-ci-app:2024-01-17
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Clone the repo to a subdirectory, so we can initialize the Zephyr
+          # workspace in the parent directory.
+          path: zephyr-workspace/nrfconnect-ci-app
+
+      - name: ♻️ Initialize Zephyr Workspace
+        run: |
+          . /venv/bin/activate
+          cd zephyr-workspace
+          west init -l nrfconnect-ci-app
+          west update --narrow -o=--depth=1 --path-cache /zephyr-workspace-cache
+
+      - name: 💾 Cache ~/.cache/ccache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/ccache
+          key: ccache-v2-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
+          restore-keys: |
+            ccache-v2-${{ runner.os }}-
+
+      - name: 🔨 Build Project
+        run: |
+          . /venv/bin/activate
           cd zephyr-workspace
           ccache -z
           west build \
