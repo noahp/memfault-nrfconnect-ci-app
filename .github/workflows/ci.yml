@@ -96,6 +96,12 @@ jobs:
               -DCONFIG_MEMFAULT_NCS_PROJECT_KEY=\"1234\"
           ccache -sv
 
+      - name: 📦 Save Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: zephyr-workspace/build/zephyr/zephyr.elf
+
   zephyr-docker-image:
     runs-on: ubuntu-latest
     container:
