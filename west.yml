@@ -7,7 +7,15 @@ manifest:
       path: nrf
       url: https://github.com/nrfconnect/sdk-nrf.git
       revision: v2.5.1
-      import: true
+      import:
+        name-allowlist:
+          - hostap
+          - zephyr
+          - mcuboot
+          - mbedtls
+          - nrfxlib
+          - cmsis
+          - hal_nordic
 
     # Specify a newer version of the Memfault Firmware SDK, overriding the one
     # specified in the nRF-Connect SDK manifest.
