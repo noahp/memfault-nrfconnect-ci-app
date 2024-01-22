@@ -15,9 +15,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: zephyr-workspace
-          key: zephyr-workspace-v1-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
+          key: zephyr-workspace-v2-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
           restore-keys: |
-            zephyr-workspace-v1-${{ runner.os }}-
+            zephyr-workspace-v2-${{ runner.os }}-
 
       - name: 🧹 Clean Landing Site
         run: |
