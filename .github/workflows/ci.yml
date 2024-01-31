@@ -5,6 +5,11 @@ on:
   push:
     branches:
       - main
+
+  # run on tag creation
+  create:
+    tags:
+
   workflow_dispatch:
 
 jobs:
@@ -12,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 💾 Cache Zephyr Workspace
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: zephyr-workspace
           key: zephyr-workspace-v2-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
@@ -30,7 +35,7 @@ jobs:
           path: zephyr-workspace/nrfconnect-ci-app
 
       - name: 💾 Cache ~/.venv
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.venv
           key: venv-${{ runner.os }}-${{ hashFiles('zephyr-workspace/zephyr/scripts/requirements.txt') }}
@@ -78,7 +83,7 @@ jobs:
           pip3 install -r zephyr/scripts/requirements.txt
 
       - name: 💾 Cache ~/.cache/ccache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
           key: ccache-v1-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
@@ -127,7 +132,7 @@ jobs:
           west update --narrow -o=--depth=1
 
       - name: 💾 Cache ~/.cache/ccache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
           key: ccache-v1-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
@@ -155,6 +160,8 @@ jobs:
           # Clone the repo to a subdirectory, so we can initialize the Zephyr
           # workspace in the parent directory.
           path: zephyr-workspace/nrfconnect-ci-app
+          # Fetch all history, so we can use git describe
+          fetch-depth: 0
 
       - name: ♻️ Initialize Zephyr Workspace
         run: |
@@ -164,7 +171,7 @@ jobs:
           west update --narrow -o=--depth=1 --path-cache /zephyr-workspace-cache
 
       - name: 💾 Cache ~/.cache/ccache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
           key: ccache-v2-${{ runner.os }}-${{ hashFiles('zephyr-workspace/nrfconnect-ci-app/west.yml') }}
@@ -172,13 +179,54 @@ jobs:
             ccache-v2-${{ runner.os }}-
 
       - name: 🔨 Build Project
+        shell: bash
         run: |
           . /venv/bin/activate
           cd zephyr-workspace
           ccache -z
+
+          # create a version string. if it's a tag build, use the tag name,
+          # otherwise use the most recent tag + git short sha
+          cd nrfconnect-ci-app
+          if [ -n "$GITHUB_REF" ]; then
+            if [[ "$GITHUB_REF" == "refs/tags/"* ]]; then
+              VERSION=$(echo $GITHUB_REF | sed 's/refs\/tags\///')
+            else
+              VERSION=$(git describe --tags --abbrev=0)
+              VERSION="${VERSION}+$(git rev-parse --short HEAD)"
+            fi
+          else
+            VERSION="0.0.0+unknown"
+          fi
+          echo ">>>> Building version ${VERSION} <<<<"
+          cd -
+
           west build \
               --board nrf7002dk_nrf5340_cpuapp \
               --pristine=always nrfconnect-ci-app \
               -- \
-              -DCONFIG_MEMFAULT_NCS_PROJECT_KEY=\"1234\"
+              -DCONFIG_MEMFAULT_NCS_PROJECT_KEY=\"${{ secrets.MEMFAULT_PROJECT_KEY }}\" \
+              -DCONFIG_MEMFAULT_NCS_FW_VERSION_STATIC=y \
+              -DCONFIG_MEMFAULT_NCS_FW_VERSION=\"${VERSION}\"
           ccache -sv
+
+      - name: 📦 Save Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: custom-docker-image-artifacts
+          path: zephyr-workspace/build/zephyr/zephyr.elf
+
+      # upload the symbol file to Memfault, if this was a tag build
+      - name: ⬆️ Upload Build to Memfault
+        if: github.event_name == 'create' && github.event.ref_type == 'tag'
+
+        run: |
+          . /venv/bin/activate
+          pip install memfault-cli==1.0.6
+          cd zephyr-workspace
+          memfault \
+            --org-token ${{ secrets.MEMFAULT_ORG_KEY }} \
+            --org ${{ secrets.MEMFAULT_ORG }} \
+            --project ${{ secrets.MEMFAULT_PROJECT }} \
+            upload-mcu-symbols \
+            build/zephyr/zephyr.elf
